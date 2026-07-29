@@ -51,6 +51,21 @@ Output: `results/test_scores.jsonl` with `p_true/p_false/p_unknown`, `predicted_
 `confidence`, `correct`, and the Step-1 metadata (`gen_strategy`, `unknown_type`,
 `rare_head`) passed through for Step 4's breakdown analysis.
 
+### Cell 5 — calibration / selective-risk evaluation (Step 4)
+```python
+!cd thesis && python -m src.eval.calibration --scores results/test_scores.jsonl --out results/calibration.json
+```
+No GPU or heavy deps needed (pure stdlib). You can instead copy `test_scores.jsonl`
+to your own PC and run this step there:
+```powershell
+cd abstain-kgc
+python -m src.eval.calibration --scores results/test_scores.jsonl --out results/calibration.json
+```
+Reports: accuracy/macro-F1, confusion matrix, ECE/Brier/NLL, risk-coverage curve +
+AURC, abstention-AUROC (does `p_unknown` separate gold-Unknown from gold-True/False?),
+a breakdown by `unknown_type`/`rare_head`, and a KG-LLM-style forced-choice binary
+baseline simulation (how confidently wrong a closed-world model is on Unknown triples).
+
 ### Faster data option
 Instead of regenerating each run, upload `data/processed/YAGO3-10` once as a
 Kaggle Dataset, add it as an input, and skip Cell 2 — point `--data-dir` at
