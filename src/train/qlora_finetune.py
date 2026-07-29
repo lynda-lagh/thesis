@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 from pathlib import Path
 
 
@@ -186,8 +187,13 @@ def main():
     print(f">> train examples: {len(train_ds)}"
           + (f" | eval: {len(eval_ds)}" if eval_ds else ""))
 
-    targs = TrainingArguments(
-        output_dir=str(out),
+    # Trainer checkpoints go to a scratch dir; the final --out folder ends up
+    # holding ONLY the trained adapter (+ tokenizer + label_info). save_only_model
+    # keeps even the scratch checkpoints adapter-only (no optimizer state), and we
+    # delete the scratch dir at the end.
+    ckpt_dir = str(out) + "_ckpt"
+    ta_kwargs = dict(
+        output_dir=ckpt_dir,
         num_train_epochs=args.epochs,
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
@@ -200,12 +206,16 @@ def main():
         optim="paged_adamw_8bit",
         logging_steps=25,
         save_steps=args.save_steps,
-        save_total_limit=2,
+        save_total_limit=1,
         eval_strategy="steps" if eval_ds else "no",
         eval_steps=args.eval_steps if eval_ds else None,
         report_to="none",
         seed=args.seed,
     )
+    try:
+        targs = TrainingArguments(save_only_model=True, **ta_kwargs)  # transformers >= 4.42
+    except TypeError:
+        targs = TrainingArguments(**ta_kwargs)
     trainer = Trainer(
         model=model, args=targs,
         train_dataset=train_ds, eval_dataset=eval_ds,
@@ -213,8 +223,12 @@ def main():
     )
     trainer.train()
 
+    # save ONLY the trained adapter (PEFT save_model writes adapter weights only,
+    # ~tens of MB — not the 15 GB base model), plus tokenizer + label info.
     trainer.save_model(str(out))
     tokenizer.save_pretrained(str(out))
+    # remove the scratch checkpoint dir so --out holds only the final adapter
+    shutil.rmtree(ckpt_dir, ignore_errors=True)
 
     # save label token info for Step 3 (P(True) scoring)
     labels = cfg.get("labels", ["True", "False", "Unknown"])
@@ -226,7 +240,11 @@ def main():
     }
     with open(out / "label_info.json", "w", encoding="utf-8") as f:
         json.dump(label_info, f, indent=2)
+
+    total = sum(p.stat().st_size for p in Path(out).rglob("*") if p.is_file())
     print(f">> saved adapter + tokenizer + label_info.json to {out}")
+    print(f">> output size: {total/1e6:.1f} MB (adapter only; base model NOT saved)")
+    print(">> to reload: PeftModel.from_pretrained(base_model, '%s')" % out)
 
 
 if __name__ == "__main__":
