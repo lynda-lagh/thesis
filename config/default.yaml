@@ -24,4 +24,4 @@ model:                             # used from Step 2 onward
   load_in_4bit: true
   max_seq_len: 512
 
-labels: [True, False, Unknown]
+labels: ["True", "False", "Unknown"]   # must be quoted - unquoted True/False parse as YAML booleans

@@ -243,8 +243,9 @@ def main():
     # remove the scratch checkpoint dir so --out holds only the final adapter
     shutil.rmtree(ckpt_dir, ignore_errors=True)
 
-    # save label token info for Step 3 (P(True) scoring)
-    labels = cfg.get("labels", ["True", "False", "Unknown"])
+    # save label token info for Step 3 (P(True) scoring).
+    # str() guards against YAML parsing unquoted True/False as booleans.
+    labels = [str(lab) for lab in cfg.get("labels", ["True", "False", "Unknown"])]
     label_info = {
         "labels": labels,
         "first_token_id": {lab: tokenizer.encode(lab, add_special_tokens=False)[0] for lab in labels},

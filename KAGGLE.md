@@ -37,6 +37,20 @@ Output (adapter + `label_info.json`) lands in `/kaggle/working/models/qwen-yago-
 so it is saved as notebook output. If you hit OOM on a single GPU: `--batch-size 2
 --grad-accum 8`.
 
+### Cell 4 — P(True) scoring (Step 3)
+```python
+!cd thesis && pip install -q -U transformers peft bitsandbytes accelerate
+!cd thesis && python -m src.scoring.ptrue \
+    --adapter /kaggle/working/models/qwen-yago-3way \
+    --data data/processed/YAGO3-10/test.jsonl \
+    --out results/test_scores.jsonl \
+    --batch-size 8
+```
+Single forward pass per example (no generation), so it is fast even at 7B.
+Output: `results/test_scores.jsonl` with `p_true/p_false/p_unknown`, `predicted_label`,
+`confidence`, `correct`, and the Step-1 metadata (`gen_strategy`, `unknown_type`,
+`rare_head`) passed through for Step 4's breakdown analysis.
+
 ### Faster data option
 Instead of regenerating each run, upload `data/processed/YAGO3-10` once as a
 Kaggle Dataset, add it as an input, and skip Cell 2 — point `--data-dir` at
