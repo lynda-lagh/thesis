@@ -1,0 +1,22 @@
+# Data (regenerate with src/data, or attach as a Kaggle Dataset) — keep out of Git
+data/raw/
+data/processed/
+*.jsonl
+*.txt
+!requirements.txt
+
+# Model weights / adapters
+models/
+*.safetensors
+*.bin
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db

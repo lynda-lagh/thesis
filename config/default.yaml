@@ -1,0 +1,27 @@
+# Central config for abstain-kgc. Step scripts read this; CLI flags override.
+
+dataset:
+  name: YAGO3-10
+  raw_dir: data/raw/YAGO3-10        # expects train.txt / valid.txt / test.txt (h \t r \t t)
+  out_dir: data/processed/YAGO3-10
+
+benchmark:                          # Step 1
+  n_per_class: 6000                 # target examples per class (true/false/unknown)
+  functional_threshold: 0.83        # fun(r) >= this  => candidate for false-eligible
+  nonfunctional_threshold: 0.65     # fun(r) <= this  => treat r as many-to-many (unknown-eligible)
+  max_multi_tail_frac: 0.12         # FALSE only if <= this frac of heads have >1 tail (single-valued)
+  min_tail_pool: 5                  # min type-consistent tail pool for UNKNOWN corruptions
+  min_pool_false: 2                 # min pool for FALSE (a clean binary relation needs only 2)
+  relation_blocklist: [hasWebsite]  # noisy/dirty relations to exclude entirely
+  rare_head_max_degree: 2           # Unknown examples whose head has <= this many triples = rare_head
+  filter_symmetric_unknown: true    # drop unknown candidates where (t, r, h) exists in KG
+  val_frac: 0.10
+  test_frac: 0.10
+  seed: 42
+
+model:                             # used from Step 2 onward
+  base: Qwen/Qwen2.5-7B-Instruct
+  load_in_4bit: true
+  max_seq_len: 512
+
+labels: [True, False, Unknown]
