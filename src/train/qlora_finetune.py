@@ -64,23 +64,36 @@ def build_dataset(jsonl_path: Path, tokenizer, max_seq_len: int):
             messages = row["messages"]                 # system + user
             answer = row["response"]                    # "True"/"False"/"Unknown"
 
-            # prompt = messages + generation prompt (assistant header, no content)
-            prompt_ids = tokenizer.apply_chat_template(
-                messages, add_generation_prompt=True, tokenize=True,
+            # Render to text first (tokenize=False -> a string), then tokenize
+            # explicitly. This avoids version differences in apply_chat_template's
+            # tokenized return type, and guarantees integer token ids.
+            prompt_text = tokenizer.apply_chat_template(
+                messages, add_generation_prompt=True, tokenize=False,
             )
-            # full = messages + assistant answer
-            full_ids = tokenizer.apply_chat_template(
+            full_text = tokenizer.apply_chat_template(
                 messages + [{"role": "assistant", "content": answer}],
-                add_generation_prompt=False, tokenize=True,
+                add_generation_prompt=False, tokenize=False,
             )
-            # truncate from the left of the prompt if needed (keep the answer)
-            if len(full_ids) > max_seq_len:
-                overflow = len(full_ids) - max_seq_len
-                prompt_ids = prompt_ids[overflow:]
-                full_ids = full_ids[overflow:]
+            # chat template already includes special tokens -> don't add more
+            prompt_ids = tokenizer(prompt_text, add_special_tokens=False)["input_ids"]
+            full_ids = tokenizer(full_text, add_special_tokens=False)["input_ids"]
 
-            labels = [-100] * len(prompt_ids) + full_ids[len(prompt_ids):]
-            labels = labels[: len(full_ids)]
+            # tokens to mask = the leading prefix shared with the prompt (the
+            # instruction). Computed by comparison, so a boundary merge can't
+            # misalign the labels.
+            n_mask = 0
+            for a, b in zip(prompt_ids, full_ids):
+                if a == b:
+                    n_mask += 1
+                else:
+                    break
+            # truncate from the left if too long, keeping the short answer at end
+            if len(full_ids) > max_seq_len:
+                cut = len(full_ids) - max_seq_len
+                full_ids = full_ids[cut:]
+                n_mask = max(0, n_mask - cut)
+
+            labels = [-100] * n_mask + full_ids[n_mask:]
             return {
                 "input_ids": torch.tensor(full_ids, dtype=torch.long),
                 "labels": torch.tensor(labels, dtype=torch.long),
