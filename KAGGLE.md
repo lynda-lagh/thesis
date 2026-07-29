@@ -66,6 +66,53 @@ AURC, abstention-AUROC (does `p_unknown` separate gold-Unknown from gold-True/Fa
 a breakdown by `unknown_type`/`rare_head`, and a KG-LLM-style forced-choice binary
 baseline simulation (how confidently wrong a closed-world model is on Unknown triples).
 
+### Cell 6 — uncertainty frameworks comparison (Step 5a)
+```python
+!cd thesis && python -m src.uncertainty.frameworks --scores results/test_scores.jsonl --out results/framework_comparison.json
+```
+Pure Python, no GPU needed. Re-expresses the model's (p_true,p_false,p_unknown)
+as probabilistic (baseline) / evidential (DST mass, Bel, Pl, BetP) /
+possibilistic (Dubois-Prade transform, necessity) / fuzzy (5-point linguistic
+scale), and reports the same Step-4 metrics for each side by side.
+
+### Cell 7 — Dempster-Shafer multi-source fusion (Step 5b, flagship)
+```python
+!cd thesis && python -m src.uncertainty.dempster_fusion \
+    --scores results/test_scores.jsonl \
+    --train data/raw/YAGO3-10/train.txt \
+    --out results/fused_scores.jsonl \
+    --discount2 0.85
+```
+Fuses the LLM's own judgment with an independent structural/KG-derived source
+(relation functionality + known tails) via Dempster's combination rule.
+Prints before/after accuracy, confusion matrix, and average conflict K.
+See the module docstring for an important, verified finding: fusing with a
+mostly-agnostic second source reinforces the more decisive source rather than
+pulling toward Unknown - a real DST property, not a bug, and a pointer to the
+natural refinement (a 3-element frame with Unknown as its own atomic
+hypothesis).
+
+### Cell 8 — prompt-engineering phase (frozen model, no adapter)
+```python
+!cd thesis && pip install -q -U transformers bitsandbytes accelerate
+!cd thesis && python -m src.prompting.run_frozen_eval \
+    --base Qwen/Qwen2.5-7B-Instruct \
+    --data data/processed/YAGO3-10/test.jsonl \
+    --train-data data/processed/YAGO3-10/train.jsonl \
+    --raw-train data/raw/YAGO3-10/train.txt \
+    --variant zero_shot \
+    --out results/frozen_zero_shot_scores.jsonl \
+    --batch-size 8 --limit 300
+```
+Change `--variant` to `few_shot` / `evidence` / `cot` to run the other three
+(or use `bash scripts/run_prompting_kaggle.sh` to run all four in sequence).
+`zero_shot`/`few_shot`/`evidence` are single forward passes (fast); `cot`
+additionally generates a short reasoning trace, so give it more time and keep
+`--limit` modest until you've confirmed it works. Drop `--limit` for final
+numbers. Feed any of these `_scores.jsonl` files into Step 4's
+`src.eval.calibration` for the same metrics as the fine-tuned model, to
+compare "no training" vs "fine-tuned" head to head.
+
 ### Faster data option
 Instead of regenerating each run, upload `data/processed/YAGO3-10` once as a
 Kaggle Dataset, add it as an input, and skip Cell 2 — point `--data-dir` at
